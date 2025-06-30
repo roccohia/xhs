@@ -1,8 +1,16 @@
 const fetch = require('node-fetch');
 const { spawn } = require('child_process');
+const { GoogleGenAI } = require('@google/genai');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = 'gemini-1.5-flash-latest'; // 推荐快速且经济的模型
+let geminiClient = null;
+if (GEMINI_API_KEY) {
+  geminiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+}
 
 const HELP_TEXT = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 
@@ -56,35 +64,25 @@ function buildPrompt(cmd, topic) {
 }
 
 async function callGemini(prompt) {
-  return new Promise((resolve, reject) => {
-    const isWin = process.platform === 'win32';
-    const npxCmd = isWin ? 'npx.cmd' : 'npx';
-    const gemini = spawn(npxCmd, ['@google/gemini-cli'], { shell: true });
-    let timedOut = false;
-    const timeout = 90000;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      gemini.kill('SIGKILL');
-      reject(new Error('❌ Gemini 响应超时，请稍后重试。'));
-    }, timeout);
-    let result = '';
-    gemini.stdout.on('data', (data) => {
-      if (timedOut) return;
-      result += data.toString();
+  if (!geminiClient) throw new Error('❌ 未配置 GEMINI_API_KEY，无法调用 Gemini API');
+  try {
+    const result = await geminiClient.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
     });
-    gemini.stderr.on('data', (data) => {});
-    gemini.on('close', (code) => {
-      clearTimeout(timeoutId);
-      if (timedOut) return;
-      if (code === 0) {
-        resolve(result.trim() || '（无内容）');
-      } else {
-        reject(new Error('❌ Gemini CLI 执行失败，请稍后重试。'));
-      }
-    });
-    gemini.stdin.write(prompt);
-    gemini.stdin.end();
-  });
+    // Gemini API 返回对象结构
+    if (result && result.text) {
+      return result.text.trim();
+    }
+    // 兼容 candidates 结构
+    if (result && result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) {
+      return result.candidates[0].content.parts[0].text.trim();
+    }
+    return '（无内容）';
+  } catch (e) {
+    if (e && e.message) throw new Error('❌ Gemini API 错误: ' + e.message);
+    throw new Error('❌ Gemini API 调用失败');
+  }
 }
 
 async function pollUpdates() {

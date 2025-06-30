@@ -7,7 +7,8 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "@google/genai": "^0.6.0"
   },
   "engines": {
     "node": ">=16.0.0"
