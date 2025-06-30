@@ -1,6 +1,8 @@
 const fetch = require('node-fetch');
 const { spawn } = require('child_process');
 const { GoogleGenAI } = require('@google/genai');
+const fs = require('fs');
+const path = require('path');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -24,6 +26,55 @@ const HELP_TEXT = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 /abtest 主题   AB测试内容生成
 /reply 主题    评论回复助手
 `;
+
+const DATA_DIR = path.join(__dirname, 'data');
+const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(HISTORY_FILE)) {
+    fs.writeFileSync(HISTORY_FILE, '[]', 'utf-8');
+  }
+}
+
+function logHistory({ chat_id, type, topic, result }) {
+  ensureDataDir();
+  const now = new Date().toISOString();
+  let logs = [];
+  try {
+    logs = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'));
+  } catch (e) {}
+  logs.push({ time: now, chat_id, type, topic, result });
+  if (logs.length > 10000) logs = logs.slice(-10000); // 限制最大条数，防止膨胀
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(logs, null, 2), 'utf-8');
+}
+
+function searchHistory(keyword, chat_id = null) {
+  ensureDataDir();
+  let logs = [];
+  try {
+    logs = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'));
+  } catch (e) {}
+  keyword = keyword.trim();
+  return logs.filter(item => {
+    if (chat_id && item.chat_id !== chat_id) return false;
+    return (
+      (item.topic && item.topic.includes(keyword)) ||
+      (item.result && item.result.includes(keyword))
+    );
+  });
+}
+
+function getUserHistory(chat_id, limit = 5) {
+  ensureDataDir();
+  let logs = [];
+  try {
+    logs = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'));
+  } catch (e) {}
+  return logs.filter(item => item.chat_id === chat_id).slice(-limit).reverse();
+}
 
 async function sendMessage(chat_id, text) {
   const maxLength = 4096;
@@ -109,6 +160,7 @@ async function pollUpdates() {
               const prompt = buildPrompt('/title', topic);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: '标题生成', topic, result });
             } catch (e) {
               await sendMessage(chat_id, e.message || '生成失败');
             }
@@ -120,6 +172,7 @@ async function pollUpdates() {
               const prompt = buildPrompt('/post', topic);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: '图文生成', topic, result });
             } catch (e) {
               await sendMessage(chat_id, e.message || '生成失败');
             }
@@ -131,6 +184,7 @@ async function pollUpdates() {
               const prompt = buildPrompt('/tags', topic);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: '标签生成', topic, result });
             } catch (e) {
               await sendMessage(chat_id, e.message || '生成失败');
             }
@@ -142,6 +196,7 @@ async function pollUpdates() {
               const prompt = buildPrompt('/cover', topic);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: '封面文案', topic, result });
             } catch (e) {
               await sendMessage(chat_id, e.message || '生成失败');
             }
@@ -153,6 +208,7 @@ async function pollUpdates() {
               const prompt = buildPrompt('/covertext', topic);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: '叠字标题', topic, result });
             } catch (e) {
               await sendMessage(chat_id, e.message || '生成失败');
             }
@@ -167,6 +223,7 @@ async function pollUpdates() {
                 const prompt = buildPrompt('/title', t);
                 const result = await callGemini(prompt);
                 allResults.push(`【${t}】\n${result}`);
+                logHistory({ chat_id, type: '批量标题', topic: t, result });
               }
               await sendMessage(chat_id, allResults.join('\n\n---\n\n'));
             } catch (e) {
@@ -180,6 +237,7 @@ async function pollUpdates() {
               const prompt = buildPrompt('/abtest', topic);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: 'AB测试', topic, result });
             } catch (e) {
               await sendMessage(chat_id, e.message || '生成失败');
             }
@@ -191,9 +249,22 @@ async function pollUpdates() {
               const prompt = buildPrompt('/reply', topic);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: '评论回复', topic, result });
             } catch (e) {
               await sendMessage(chat_id, e.message || '生成失败');
             }
+          } else if (text.startsWith('/search ')) {
+            const keyword = text.replace('/search', '').trim();
+            if (!keyword) return await sendMessage(chat_id, '请在 /search 后输入关键词');
+            const found = searchHistory(keyword, chat_id);
+            if (found.length === 0) return await sendMessage(chat_id, '未找到相关历史记录');
+            let msg = found.slice(-5).reverse().map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
+            await sendMessage(chat_id, msg);
+          } else if (text === '/history') {
+            const logs = getUserHistory(chat_id, 5);
+            if (logs.length === 0) return await sendMessage(chat_id, '暂无历史记录');
+            let msg = logs.map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
+            await sendMessage(chat_id, msg);
           }
         }
       }
