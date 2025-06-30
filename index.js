@@ -25,6 +25,9 @@ const HELP_TEXT = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 /batch 主题1,主题2,...  批量标题生成
 /abtest 主题   AB测试内容生成
 /reply 主题    评论回复助手
+/seo-check 类型 内容  SEO分析（类型可省略，支持标题/正文/标签）
+/search 关键词   查询你历史生成内容
+/history        查看你最近5条请求记录
 `;
 
 const DATA_DIR = path.join(__dirname, 'data');
@@ -134,6 +137,28 @@ async function callGemini(prompt) {
     if (e && e.message) throw new Error('❌ Gemini API 错误: ' + e.message);
     throw new Error('❌ Gemini API 调用失败');
   }
+}
+
+// 读取 SEO 检查 prompt
+function getSeoPrompt(type, content) {
+  const fs = require('fs');
+  const path = require('path');
+  const promptPath = path.join(__dirname, 'prompts', 'seo_checker.txt');
+  let template = '';
+  try {
+    template = fs.readFileSync(promptPath, 'utf-8');
+  } catch (e) {
+    template = '请你作为一名精通小红书平台算法推荐机制的运营专家，分析以下内容的 SEO 表现，并给出评分和优化建议：\n\n内容类型：{{type}}（可能是：标题 / 正文 / 标签）\n内容如下：\n{{content}}\n\n请按如下格式输出分析结果：\n📊 SEO 分析报告：\n- 类型：{{type}}\n- 评分：{{score}}/100\n- 关键词分析：{{keywords}}（列出检测到的关键关键词）\n- 存在问题：{{issues}}（如字数不合适、无钩子、情绪弱等）\n- 优化建议：{{suggestions}}\n\n请以简洁、专业的语气作答，分析结果适合发到 Telegram。';
+  }
+  return template.replace(/{{type}}/g, type).replace(/{{content}}/g, content);
+}
+
+function guessSeoType(content) {
+  // 简单正则判断
+  if (/^#/.test(content) || /#\w+/.test(content)) return '标签';
+  if (/。|！|？|\n|\r|\s{2,}/.test(content) && content.length > 15) return '正文';
+  if (content.length <= 30) return '标题';
+  return '正文';
 }
 
 async function pollUpdates() {
@@ -265,6 +290,29 @@ async function pollUpdates() {
             if (logs.length === 0) return await sendMessage(chat_id, '暂无历史记录');
             let msg = logs.map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
             await sendMessage(chat_id, msg);
+          } else if (text.startsWith('/seo-check ') || text.startsWith('/seo ')) {
+            let input = text.replace(/^\/seo-check|^\/seo/, '').trim();
+            let type = '', content = '';
+            // 支持 /seo-check 标题 xxx
+            const match = input.match(/^(标题|正文|标签)\s+([\s\S]+)/);
+            if (match) {
+              type = match[1];
+              content = match[2].trim();
+            } else {
+              // 自动判断类型
+              content = input;
+              type = guessSeoType(content);
+            }
+            if (!content) return await sendMessage(chat_id, '请在 /seo-check 后输入内容，如：/seo-check 标题 XXX');
+            await sendMessage(chat_id, `⏳ 正在分析${type}的 SEO 表现，请稍候...`);
+            try {
+              const prompt = getSeoPrompt(type, content);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: 'SEO检查', topic: `${type}:${content.slice(0,30)}`, result });
+            } catch (e) {
+              await sendMessage(chat_id, e.message || 'SEO 分析失败');
+            }
           }
         }
       }
