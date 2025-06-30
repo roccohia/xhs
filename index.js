@@ -78,21 +78,58 @@ function setUserLang(chat_id, code) {
   userLangMap.set(chat_id, getLangByCode(code));
 }
 
-const HELP_TEXT = `🧃 Gemini 小红书助手 Bot 支持以下指令：
+// 优化版帮助信息
+const helpMessage = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 
-/xhs-help  查看功能列表
-/title 主题    生成爆款标题
-/post 主题     生成图文内容
-/tags 主题     推荐小红书标签
-/cover 主题    封面文案生成
-/covertext 主题 叠字标题生成
-/batch 主题1,主题2,...  批量标题生成
-/abtest 主题   AB测试内容生成
-/reply 主题    评论回复助手
-/seo-check 类型 内容  SEO分析（类型可省略，支持标题/正文/标签）
-/seoopt 文案内容   生成SEO优化建议和改写
-/search 关键词   查询你历史生成内容
-/history        查看你最近5条请求记录
+📌 核心功能
+/title 主题 —— 生成爆款标题
+/post 主题 —— 生成图文内容
+/tags 主题 —— 推荐小红书标签
+/cover 主题 —— 封面文案生成
+/covertext 主题 —— 封面叠字标题生成
+
+🧪 实验功能
+/batch 主题1,主题2,... —— 批量生成标题
+/abtest 主题 —— AB测试内容生成
+/reply 主题 —— 评论回复助手
+
+📈 SEO 分析
+/seo-check 类型 内容 —— 分析标题/文案/标签 SEO
+/seoopt 内容 —— 生成优化建议与改写
+
+🔍 历史记录
+/search 关键词 —— 查询历史请求
+/history —— 查看最近请求记录
+
+🛠️ 辅助指令
+/xhs-help —— 查看全部指令
+/menu —— 弹出主菜单按钮
+`;
+const helpMessageEn = `🧃 Gemini Xiaohongshu Assistant Bot supports the following commands:
+
+📌 Core Features
+/title topic —— Generate viral titles
+/post topic —— Generate post content
+/tags topic —— Recommend tags
+/cover topic —— Generate cover text
+/covertext topic —— Generate repeated-word cover titles
+
+🧪 Experimental
+/batch topic1,topic2,... —— Batch title generation
+/abtest topic —— AB test content
+/reply topic —— Comment reply assistant
+
+📈 SEO Analysis
+/seo-check type content —— Analyze SEO for title/body/tags
+/seoopt content —— Generate optimization suggestions and rewrite
+
+🔍 History
+/search keyword —— Search your history
+/history —— View your recent requests
+
+🛠️ Utilities
+/xhs-help —— Show all commands
+/menu —— Show main menu buttons
 `;
 
 const DATA_DIR = path.join(__dirname, 'data');
@@ -394,7 +431,7 @@ async function pollUpdates() {
           }
 
           if (text === '/xhs-help') {
-            await sendMessage(chat_id, I18N[lang]?.help || I18N.zh.help, lang);
+            await sendMessage(chat_id, lang === 'en' ? helpMessageEn : helpMessage, lang);
           } else if (text === '/menu') {
             await sendMenu(chat_id, undefined, lang);
           } else if (text.startsWith('/title ')) {
