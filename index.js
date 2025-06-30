@@ -1,5 +1,8 @@
+const fetch = require('node-fetch');
+const { spawn } = require('child_process');
+
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`; 
+const API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
 const HELP_TEXT = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 
@@ -12,10 +15,77 @@ const HELP_TEXT = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 /batch 主题1,主题2,...  批量标题生成
 /abtest 主题   AB测试内容生成
 /reply 主题    评论回复助手
-/ptime 主题 年龄段  发布时间建议
-/hotspot 主题  话题爆点分析
-/comment 主题  评论引导语生成
 `;
+
+async function sendMessage(chat_id, text) {
+  const maxLength = 4096;
+  if (text.length > maxLength) {
+    text = text.slice(0, maxLength - 20) + '\n...(内容过长已截断)';
+  }
+  await fetch(`${API_URL}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id,
+      text,
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true
+    })
+  });
+}
+
+function buildPrompt(cmd, topic) {
+  switch (cmd) {
+    case '/title':
+      return `你是一位深谙小红书爆款标题精髓的文案专家。请为以下主题「${topic}」创作 10 个爆款小红书标题。\n\n要求：\n1.  面向年轻用户（18-25岁），风格口语化、有网感、能引发好奇心。\n2.  避免浮夸和营销腔，要像真实用户在分享。\n3.  可以适当运用 emoji、数字、场景化描述来增强吸引力。\n4.  直接输出列表，每行一个标题，不要添加任何序号或多余的解释。`;
+    case '/post':
+      return `你是一位资深的小红书博主，尤其擅长撰写高互动率的图文"种草"笔记。请围绕主题「${topic}」，创作一篇完整的小红书图文笔记内容。\n\n要求：\n1.  使用第一人称视角，语气亲切、真实，像在和好朋友分享。\n2.  内容结构清晰，善用分点或分段来组织，并大量使用 emoji 增加生动性。\n3.  开头：用一个引人入胜的问题或一句话抓住读者眼球。\n4.  结尾：有一个总结性的句子，并用一句话引导用户评论、点赞或收藏。\n5.  在文末，另起一行，根据内容生成 5-8 个相关的小红书热门标签（hashtags）。\n6.  直接输出完整的笔记内容和标签，不要有任何额外的说明或标题。`;
+    case '/tags':
+      return `你是一位小红书运营专家，精通流量分发和标签（hashtag）策略。请为一篇关于「${topic}」的小红书笔记，推荐 10-15 个最合适的标签。\n\n要求：\n1.  推荐的标签需要有层次感，组合使用以达到最佳曝光效果，应包括：\n    -   2-3 个宽泛的类目大词 (如 #笔记灵感 #好物分享)\n    -   3-5 个精准的核心主题词 (直接与 ${topic} 相关)\n    -   3-5 个相关的场景或人群词 (如 #周末去哪儿 #学生党)\n    -   2-3 个潜在的热门或长尾词\n2.  直接输出所有标签，用空格隔开，以 # 开头。\n3.  不要添加任何分类标题或解释。`;
+    case '/cover':
+      return `你是一位小红书爆款文案专家。请为主题"${topic}"创作5组适合放在笔记封面上的"叠字文案"。\n\n要求：\n1.  每组文案由一个"主标题"和一个"副标题"构成。\n2.  主标题要非常吸引眼球，用词简单、有冲击力。\n3.  副标题是对主标题的补充或解释，言简意赅。\n4.  整体风格要适合小红书用户，活泼、有趣、或能引发好奇。\n5.  使用 emoji 增强表达力。\n6.  严格按照下面的格式输出，不要有任何多余的解释：\n\n主标题 | 副标题\n主标题 | 副标题\n主标题 | 副标题\n主标题 | 副标题\n主标题 | 副标题`;
+    case '/covertext':
+      return `你是一位极其擅长拿捏年轻用户情绪的小红书文案鬼才。请为主题「${topic}」创作 5 个用在笔记封面上的"叠字标题"。\n\n要求：\n1.  核心是"叠字"，如"冲冲冲"、"美哭了"、"绝绝子"，必须用这种形式来构建标题。\n2.  风格要极其吸睛、夸张、有强烈的情绪价值，让人一看就有点击的冲动。\n3.  长度控制在 10-15 字，适合在图片上展示。\n4.  直接输出列表，每行一个标题，不要添加任何序号或多余的解释。`;
+    case '/abtest':
+      return `你是一位小红书爆款内容专家。请围绕主题「${topic}」，分别用三种不同风格各生成一组完整的小红书内容（每组包含：标题、正文、标签），风格要求如下：\n\nA. 真实生活流：内容自然真实，像朋友间的真实分享。\nB. 猎奇冲突流：内容有反转、冲突感，能激发好奇心。\nC. 情绪感染流：内容有强烈代入感和情绪渲染。\n\n每组内容请严格按照如下格式输出：\n【风格A】\n标题：...\n正文：...\n标签：#... #... #...\n【风格B】\n标题：...\n正文：...\n标签：#... #... #...\n【风格C】\n标题：...\n正文：...\n标签：#... #... #...\n\n三组内容之间用"==="分隔，不要有任何多余解释。`;
+    case '/reply':
+      return `你是一位小红书高赞博主，善于与粉丝互动。请针对主题「${topic}」的笔记，分别为以下4类常见评论各生成2条高赞风格的互动回复：\n\n1. 用户疑问（如 敏感肌能用吗）\n2. 用户夸赞（如 好漂亮！）\n3. 用户质疑（如 会不会踩雷？）\n4. 用户咨询（如 哪里可以买到）\n\n要求：\n- 每类评论生成2条回复，风格自然、有代入感、略带引导性。\n- 回复要有亲和力，适当引导用户点赞、关注或私信。\n- 输出格式如下：\n【用户疑问】\n回复1：...\n回复2：...\n【用户夸赞】\n回复1：...\n回复2：...\n【用户质疑】\n回复1：...\n回复2：...\n【用户咨询】\n回复1：...\n回复2：...\n\n不要有任何多余解释。`;
+    default:
+      return '';
+  }
+}
+
+async function callGemini(prompt) {
+  return new Promise((resolve, reject) => {
+    const isWin = process.platform === 'win32';
+    const npxCmd = isWin ? 'npx.cmd' : 'npx';
+    const gemini = spawn(npxCmd, ['@google/gemini-cli'], { shell: true });
+    let timedOut = false;
+    const timeout = 90000;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      gemini.kill('SIGKILL');
+      reject(new Error('❌ Gemini 响应超时，请稍后重试。'));
+    }, timeout);
+    let result = '';
+    gemini.stdout.on('data', (data) => {
+      if (timedOut) return;
+      result += data.toString();
+    });
+    gemini.stderr.on('data', (data) => {});
+    gemini.on('close', (code) => {
+      clearTimeout(timeoutId);
+      if (timedOut) return;
+      if (code === 0) {
+        resolve(result.trim() || '（无内容）');
+      } else {
+        reject(new Error('❌ Gemini CLI 执行失败，请稍后重试。'));
+      }
+    });
+    gemini.stdin.write(prompt);
+    gemini.stdin.end();
+  });
+}
 
 async function pollUpdates() {
   let offset = 0;
@@ -30,11 +100,109 @@ async function pollUpdates() {
           const chat_id = update.message.chat.id;
           const text = update.message.text.trim();
           console.log(`[Telegram] 收到消息:`, text);
-          // ...后续处理逻辑
+
+          if (text === '/xhs-help') {
+            await sendMessage(chat_id, HELP_TEXT);
+          } else if (text.startsWith('/title ')) {
+            const topic = text.replace('/title', '').trim();
+            if (!topic) return await sendMessage(chat_id, '请在 /title 后输入主题');
+            await sendMessage(chat_id, '⏳ 正在为你生成爆款标题，请稍候...');
+            try {
+              const prompt = buildPrompt('/title', topic);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+            } catch (e) {
+              await sendMessage(chat_id, e.message || '生成失败');
+            }
+          } else if (text.startsWith('/post ')) {
+            const topic = text.replace('/post', '').trim();
+            if (!topic) return await sendMessage(chat_id, '请在 /post 后输入主题');
+            await sendMessage(chat_id, '⏳ 正在为你生成图文内容，请稍候...');
+            try {
+              const prompt = buildPrompt('/post', topic);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+            } catch (e) {
+              await sendMessage(chat_id, e.message || '生成失败');
+            }
+          } else if (text.startsWith('/tags ')) {
+            const topic = text.replace('/tags', '').trim();
+            if (!topic) return await sendMessage(chat_id, '请在 /tags 后输入主题');
+            await sendMessage(chat_id, '⏳ 正在为你推荐标签，请稍候...');
+            try {
+              const prompt = buildPrompt('/tags', topic);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+            } catch (e) {
+              await sendMessage(chat_id, e.message || '生成失败');
+            }
+          } else if (text.startsWith('/cover ')) {
+            const topic = text.replace('/cover', '').trim();
+            if (!topic) return await sendMessage(chat_id, '请在 /cover 后输入主题');
+            await sendMessage(chat_id, '⏳ 正在为你生成封面文案，请稍候...');
+            try {
+              const prompt = buildPrompt('/cover', topic);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+            } catch (e) {
+              await sendMessage(chat_id, e.message || '生成失败');
+            }
+          } else if (text.startsWith('/covertext ')) {
+            const topic = text.replace('/covertext', '').trim();
+            if (!topic) return await sendMessage(chat_id, '请在 /covertext 后输入主题');
+            await sendMessage(chat_id, '⏳ 正在为你生成叠字标题，请稍候...');
+            try {
+              const prompt = buildPrompt('/covertext', topic);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+            } catch (e) {
+              await sendMessage(chat_id, e.message || '生成失败');
+            }
+          } else if (text.startsWith('/batch ')) {
+            const topics = text.replace('/batch', '').trim();
+            if (!topics) return await sendMessage(chat_id, '请在 /batch 后输入多个主题');
+            await sendMessage(chat_id, '⏳ 正在为你批量生成标题，请稍候...');
+            try {
+              const topicArr = topics.split(/,|，/).map(t => t.trim()).filter(Boolean);
+              let allResults = [];
+              for (const t of topicArr) {
+                const prompt = buildPrompt('/title', t);
+                const result = await callGemini(prompt);
+                allResults.push(`【${t}】\n${result}`);
+              }
+              await sendMessage(chat_id, allResults.join('\n\n---\n\n'));
+            } catch (e) {
+              await sendMessage(chat_id, e.message || '批量生成失败');
+            }
+          } else if (text.startsWith('/abtest ')) {
+            const topic = text.replace('/abtest', '').trim();
+            if (!topic) return await sendMessage(chat_id, '请在 /abtest 后输入主题');
+            await sendMessage(chat_id, '⏳ 正在为你生成AB测试内容，请稍候...');
+            try {
+              const prompt = buildPrompt('/abtest', topic);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+            } catch (e) {
+              await sendMessage(chat_id, e.message || '生成失败');
+            }
+          } else if (text.startsWith('/reply ')) {
+            const topic = text.replace('/reply', '').trim();
+            if (!topic) return await sendMessage(chat_id, '请在 /reply 后输入主题');
+            await sendMessage(chat_id, '⏳ 正在为你生成评论回复，请稍候...');
+            try {
+              const prompt = buildPrompt('/reply', topic);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+            } catch (e) {
+              await sendMessage(chat_id, e.message || '生成失败');
+            }
+          }
         }
       }
     } catch (e) {
       await new Promise(res => setTimeout(res, 3000));
     }
   }
-} 
+}
+
+pollUpdates(); 
