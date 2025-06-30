@@ -26,6 +26,7 @@ const HELP_TEXT = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 /abtest 主题   AB测试内容生成
 /reply 主题    评论回复助手
 /seo-check 类型 内容  SEO分析（类型可省略，支持标题/正文/标签）
+/seoopt 文案内容   生成SEO优化建议和改写
 /search 关键词   查询你历史生成内容
 /history        查看你最近5条请求记录
 `;
@@ -159,6 +160,20 @@ function guessSeoType(content) {
   if (/。|！|？|\n|\r|\s{2,}/.test(content) && content.length > 15) return '正文';
   if (content.length <= 30) return '标题';
   return '正文';
+}
+
+// 读取 SEO 优化建议 prompt
+function getSeoOptPrompt(content) {
+  const fs = require('fs');
+  const path = require('path');
+  const promptPath = path.join(__dirname, 'prompts', 'seo_optimizer.txt');
+  let template = '';
+  try {
+    template = fs.readFileSync(promptPath, 'utf-8');
+  } catch (e) {
+    template = '请作为一名精通小红书 SEO 的运营专家，针对以下文案内容进行优化。请输出以下结构：\n\n1. 当前文案存在的 SEO 问题（最多 3 条）\n2. 针对每个问题给出优化建议\n3. 输出一份优化后的完整版本（风格仍保持原本风格）\n\n文案内容如下：\n{{content}}';
+  }
+  return template.replace(/{{content}}/g, content);
 }
 
 async function pollUpdates() {
@@ -312,6 +327,18 @@ async function pollUpdates() {
               logHistory({ chat_id, type: 'SEO检查', topic: `${type}:${content.slice(0,30)}`, result });
             } catch (e) {
               await sendMessage(chat_id, e.message || 'SEO 分析失败');
+            }
+          } else if (text.startsWith('/seoopt ')) {
+            const content = text.replace('/seoopt', '').trim();
+            if (!content) return await sendMessage(chat_id, '请在 /seoopt 后输入需要优化的文案内容');
+            await sendMessage(chat_id, '⏳ 正在为你分析并优化文案，请稍候...');
+            try {
+              const prompt = getSeoOptPrompt(content);
+              const result = await callGemini(prompt);
+              await sendMessage(chat_id, result);
+              logHistory({ chat_id, type: 'SEO优化建议', topic: content.slice(0,30), result });
+            } catch (e) {
+              await sendMessage(chat_id, e.message || 'SEO 优化失败');
             }
           }
         }
