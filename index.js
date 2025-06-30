@@ -144,6 +144,21 @@ const MAIN_MENU_BUTTONS = [
   ['/xhs-help']
 ];
 
+// Inline Keyboard 菜单按钮
+const INLINE_MENU = [
+  [
+    { text: '📌 生成标题', callback_data: 'menu_title' },
+    { text: '🖼️ 图文内容', callback_data: 'menu_post' }
+  ],
+  [
+    { text: '🔖 标签推荐', callback_data: 'menu_tags' },
+    { text: '📊 SEO 分析', callback_data: 'menu_seo' }
+  ],
+  [
+    { text: '📁 历史记录', callback_data: 'menu_history' }
+  ]
+];
+
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -372,6 +387,42 @@ async function sendMenu(chat_id, text, lang) {
   });
 }
 
+async function sendInlineMenu(chat_id, text, lang) {
+  text = text || (lang === 'en' ? 'Please select a function:' : '请选择功能：');
+  await fetch(`${API_URL}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id,
+      text,
+      reply_markup: {
+        inline_keyboard: INLINE_MENU
+      }
+    })
+  });
+}
+
+// 拼写纠错映射
+const CMD_CORRECT = {
+  '/tilte': '/title',
+  '/titile': '/title',
+  '/titel': '/title',
+  '/psot': '/post',
+  '/tgas': '/tags',
+  '/tage': '/tags',
+  '/seo-chek': '/seo-check',
+  '/seocehck': '/seo-check',
+  '/seooptm': '/seoopt',
+  '/batc': '/batch',
+  '/abtes': '/abtest',
+  '/repl': '/reply',
+  // 可继续扩展
+};
+
+function getCorrection(cmd) {
+  return CMD_CORRECT[cmd.toLowerCase()] || null;
+}
+
 // 统一错误提示
 const ERROR_TIPS = {
   zh: {
@@ -408,7 +459,39 @@ async function pollUpdates() {
       if (data.result && data.result.length > 0) {
         for (const update of data.result) {
           offset = update.update_id + 1;
-          if (!update.message || !update.message.text) continue;
+          if (!update.message && !update.callback_query) continue;
+          // Inline Keyboard 回调处理
+          if (update.callback_query) {
+            const chat_id = update.callback_query.message.chat.id;
+            const lang_code = update.callback_query.from?.language_code || '';
+            setUserLang(chat_id, lang_code);
+            const lang = getUserLang(chat_id);
+            const data = update.callback_query.data;
+            if (data === 'menu_title') {
+              await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /title Open a milk tea shop' : '请输入主题，例如 /title 奶茶店开业', lang);
+            } else if (data === 'menu_post') {
+              await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /post Open a milk tea shop' : '请输入主题，例如 /post 奶茶店开业', lang);
+            } else if (data === 'menu_tags') {
+              await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /tags Open a milk tea shop' : '请输入主题，例如 /tags 奶茶店开业', lang);
+            } else if (data === 'menu_seo') {
+              await sendMessage(chat_id, lang === 'en' ? 'Please enter content, e.g. /seo-check Milk tea shop copy: xxx' : '请输入内容，例如 /seo-check 奶茶店文案：xxx', lang);
+            } else if (data === 'menu_history') {
+              // 自动触发 /history
+              const logs = getUserHistory(chat_id, 5);
+              if (logs.length === 0) return await sendMessage(chat_id, ERROR_TIPS[lang].no_history, lang);
+              let msg = logs.map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
+              await sendMessage(chat_id, msg, lang);
+            }
+            // 回调按钮点击后移除 loading
+            await fetch(`${API_URL}/answerCallbackQuery`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                callback_query_id: update.callback_query.id
+              })
+            });
+            continue;
+          }
           const chat_id = update.message.chat.id;
           const text = update.message.text.trim();
           const lang_code = update.message.from?.language_code || '';
@@ -427,14 +510,58 @@ async function pollUpdates() {
           // 首次对话欢迎
           if (!greeted.has(chat_id)) {
             greeted.add(chat_id);
-            await sendMenu(chat_id, I18N[lang]?.welcome || I18N.zh.welcome, lang);
+            await sendMessage(chat_id, lang === 'en' ? '👋 Welcome to Gemini Xiaohongshu Assistant! Please select a function or enter a command:' : '👋 欢迎使用 Gemini 小红书助手！请选择功能或输入指令：', lang);
+            await sendInlineMenu(chat_id, undefined, lang);
+          }
+
+          // 智能纠错与菜单
+          const lower = text.toLowerCase();
+          if (getCorrection(lower)) {
+            const correct = getCorrection(lower);
+            await sendMessage(chat_id, (lang === 'en' ? `Did you mean ${correct}?` : `你是不是想输入 ${correct}？`), lang);
+            await sendInlineMenu(chat_id, undefined, lang);
+            continue;
+          }
+
+          // /menu 指令：发送 Inline Keyboard
+          if (text === '/menu') {
+            await sendInlineMenu(chat_id, undefined, lang);
+            continue;
           }
 
           if (text === '/xhs-help') {
             await sendMessage(chat_id, lang === 'en' ? helpMessageEn : helpMessage, lang);
-          } else if (text === '/menu') {
-            await sendMenu(chat_id, undefined, lang);
-          } else if (text.startsWith('/title ')) {
+            continue;
+          }
+
+          // 指令纠错：如 /title 无参数
+          if (/^\/title\s*$/i.test(text)) {
+            await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /title Open a milk tea shop' : '请输入主题，例如 /title 奶茶店开业', lang);
+            await sendInlineMenu(chat_id, undefined, lang);
+            continue;
+          }
+          if (/^\/post\s*$/i.test(text)) {
+            await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /post Open a milk tea shop' : '请输入主题，例如 /post 奶茶店开业', lang);
+            await sendInlineMenu(chat_id, undefined, lang);
+            continue;
+          }
+          if (/^\/tags\s*$/i.test(text)) {
+            await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /tags Open a milk tea shop' : '请输入主题，例如 /tags 奶茶店开业', lang);
+            await sendInlineMenu(chat_id, undefined, lang);
+            continue;
+          }
+          if (/^\/seo-check\s*$/i.test(text)) {
+            await sendMessage(chat_id, lang === 'en' ? 'Please enter content, e.g. /seo-check Milk tea shop copy: xxx' : '请输入内容，例如 /seo-check 奶茶店文案：xxx', lang);
+            await sendInlineMenu(chat_id, undefined, lang);
+            continue;
+          }
+          if (/^\/seoopt\s*$/i.test(text)) {
+            await sendMessage(chat_id, lang === 'en' ? 'Please enter content to optimize, e.g. /seoopt Your original copy' : '请输入需要优化的内容，例如 /seoopt 你的原始文案', lang);
+            await sendInlineMenu(chat_id, undefined, lang);
+            continue;
+          }
+
+          if (text.startsWith('/title ')) {
             const topic = text.replace('/title', '').trim();
             if (!topic) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
             await sendMessage(chat_id, lang === 'en' ? '⏳ Generating viral titles, please wait...' : '⏳ 正在为你生成爆款标题，请稍候...', lang);
