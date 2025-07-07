@@ -21,20 +21,11 @@ const I18N = {
     menu: '请选择功能：',
     help: `🧃 Gemini 小红书助手 Bot 支持以下指令：
 
-/xhs-help  查看功能列表
-/title 主题    生成爆款标题
-/post 主题     生成图文内容
-/tags 主题     推荐小红书标签
-/cover 主题    封面文案生成
-/covertext 主题 叠字标题生成
-/batch 主题1,主题2,...  批量标题生成
-/abtest 主题   AB测试内容生成
-/reply 主题    评论回复助手
-/seo-check 类型 内容  SEO分析（类型可省略，支持标题/正文/标签）
-/seoopt 文案内容   生成SEO优化建议和改写
-/search 关键词   查询你历史生成内容
-/history        查看你最近5条请求记录
-/menu           弹出主菜单
+🪝 /hook 背景描述 —— 小红书钩子型开头生成
+📁 /history —— 查看最近请求记录
+🔍 /search 关键词 —— 查询历史记录
+❓ /xhs-help —— 显示帮助列表
+/menu —— 弹出主菜单按钮
 `,
     // 其它提示可继续扩展
   },
@@ -43,20 +34,11 @@ const I18N = {
     menu: 'Please select a feature:',
     help: `🧃 Gemini Xiaohongshu Assistant Bot supports the following commands:
 
-/xhs-help  Show help menu
-/title topic    Generate viral titles
-/post topic     Generate post content
-/tags topic     Recommend tags
-/cover topic    Generate cover text
-/covertext topic Generate repeated-word titles
-/batch topic1,topic2,...  Batch title generation
-/abtest topic   AB test content
-/reply topic    Comment reply assistant
-/seo-check type content  SEO analysis (type optional: title/body/tags)
-/seoopt content   Generate SEO optimization suggestions and rewrite
-/search keyword   Search your history
-/history         View your last 5 requests
-/menu            Show main menu
+🪝 /hook background —— Generate Xiaohongshu hook openers
+📁 /history —— View your recent requests
+🔍 /search keyword —— Search your history
+❓ /xhs-help —— Show help menu
+/menu —— Show main menu buttons
 `,
   }
 };
@@ -81,81 +63,41 @@ function setUserLang(chat_id, code) {
 // 优化版帮助信息
 const helpMessage = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 
-📌 核心功能
-/title 主题 —— 生成爆款标题
-/post 主题 —— 生成图文内容
-/tags 主题 —— 推荐小红书标签
-/cover 主题 —— 封面文案生成
-/covertext 主题 —— 封面叠字标题生成
-
-🧪 实验功能
-/batch 主题1,主题2,... —— 批量生成标题
-/abtest 主题 —— AB测试内容生成
-/reply 主题 —— 评论回复助手
-
-📈 SEO 分析
-/seo-check 类型 内容 —— 分析标题/文案/标签 SEO
-/seoopt 内容 —— 生成优化建议与改写
-
-🔍 历史记录
-/search 关键词 —— 查询历史请求
-/history —— 查看最近请求记录
-
-🛠️ 辅助指令
-/xhs-help —— 查看全部指令
+🪝 /hook 背景描述 —— 小红书钩子型开头生成
+📁 /history —— 查看最近请求记录
+🔍 /search 关键词 —— 查询历史记录
+❓ /xhs-help —— 显示帮助列表
 /menu —— 弹出主菜单按钮
 `;
 const helpMessageEn = `🧃 Gemini Xiaohongshu Assistant Bot supports the following commands:
 
-📌 Core Features
-/title topic —— Generate viral titles
-/post topic —— Generate post content
-/tags topic —— Recommend tags
-/cover topic —— Generate cover text
-/covertext topic —— Generate repeated-word cover titles
-
-🧪 Experimental
-/batch topic1,topic2,... —— Batch title generation
-/abtest topic —— AB test content
-/reply topic —— Comment reply assistant
-
-📈 SEO Analysis
-/seo-check type content —— Analyze SEO for title/body/tags
-/seoopt content —— Generate optimization suggestions and rewrite
-
-🔍 History
-/search keyword —— Search your history
-/history —— View your recent requests
-
-🛠️ Utilities
-/xhs-help —— Show all commands
+🪝 /hook background —— Generate Xiaohongshu hook openers
+📁 /history —— View your recent requests
+🔍 /search keyword —— Search your history
+❓ /xhs-help —— Show help menu
 /menu —— Show main menu buttons
 `;
+I18N.zh.help = helpMessage;
+I18N.en.help = helpMessageEn;
 
 const DATA_DIR = path.join(__dirname, 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 
 // 主菜单按钮列表
 const MAIN_MENU_BUTTONS = [
-  ['/title', '/post', '/tags'],
-  ['/cover', '/covertext', '/batch'],
-  ['/abtest', '/reply', '/seo-check'],
-  ['/seoopt', '/search', '/history'],
-  ['/xhs-help']
+  ['/hook'],
+  ['/search', '/history'],
+  ['/xhs-help', '/menu']
 ];
 
 // Inline Keyboard 菜单按钮
 const INLINE_MENU = [
   [
-    { text: '📌 生成标题', callback_data: 'menu_title' },
-    { text: '🖼️ 图文内容', callback_data: 'menu_post' }
+    { text: '🪝 钩子开头', callback_data: 'menu_hook' }
   ],
   [
-    { text: '🔖 标签推荐', callback_data: 'menu_tags' },
-    { text: '📊 SEO 分析', callback_data: 'menu_seo' }
-  ],
-  [
-    { text: '📁 历史记录', callback_data: 'menu_history' }
+    { text: '📁 历史记录', callback_data: 'menu_history' },
+    { text: '❓ 帮助', callback_data: 'menu_help' }
   ]
 ];
 
@@ -268,45 +210,19 @@ async function sendMessage(chat_id, text, lang) {
 function buildPrompt(cmd, topic, lang) {
   if (lang === 'en') {
     switch (cmd) {
-      case '/title':
-        return `You are an expert in crafting viral Xiaohongshu (RED) titles. Please create 10 viral titles for the topic "${topic}".\n\nRequirements:\n1. Target young users (18-25), use colloquial, internet-savvy, curiosity-inducing style.\n2. Avoid exaggeration and marketing tone, sound like a real user sharing.\n3. Use emoji, numbers, and scenario descriptions to enhance appeal.\n4. Output a list, one title per line, no numbering or extra explanation.`;
-      case '/post':
-        return `You are a senior Xiaohongshu (RED) blogger, skilled at writing highly engaging posts. Please create a complete Xiaohongshu post for the topic "${topic}".\n\nRequirements:\n1. Use first-person, friendly, authentic tone, as if sharing with a friend.\n2. Clear structure, use points/paragraphs, lots of emoji.\n3. Start: Grab attention with a question or statement.\n4. End: Summarize and encourage comments/likes/saves.\n5. At the end, generate 5-8 relevant hashtags.\n6. Output the full post and tags, no extra explanation or title.`;
-      case '/tags':
-        return `You are a Xiaohongshu (RED) operations expert, skilled in tag strategy. Please recommend 10-15 suitable tags for a post about "${topic}".\n\nRequirements:\n1. Tags should be layered: 2-3 broad, 3-5 core, 3-5 scenario/audience, 2-3 potential hot/long-tail.\n2. Output all tags, separated by spaces, each starting with #.\n3. No extra explanation.`;
-      case '/cover':
-        return `You are a viral copywriting expert. Please create 5 sets of repeated-word cover copy for the topic "${topic}".\n\nEach set: Main title + subtitle.\nMain: eye-catching, simple, impactful.\nSub: concise supplement.\nStyle: lively, fun, curiosity-inducing.\nUse emoji.\nFormat:\nMain | Sub\n...`;
-      case '/covertext':
-        return `You are a copywriting genius for young users. Please create 5 repeated-word cover titles for the topic "${topic}".\n\nRequirements:\n1. Must use repeated words (e.g. "Go go go", "So pretty", "Awesome").\n2. Extremely eye-catching, emotional, click-inducing.\n3. 10-15 characters, suitable for image.\n4. Output a list, one per line, no numbering or extra explanation.`;
-      case '/abtest':
-        return `You are a viral content expert. For the topic "${topic}", generate 3 sets of Xiaohongshu content (title, body, tags) in 3 styles:\nA. Real-life: natural, authentic, like sharing with friends.\nB. Curiosity/conflict: reversal, conflict, curiosity.\nC. Emotional: strong empathy and emotion.\nFormat:\n[Style A]\nTitle:...\nBody:...\nTags: #... #...\n[Style B]...\n[Style C]...\nSeparate groups with ===, no extra explanation.`;
-      case '/reply':
-        return `You are a top Xiaohongshu blogger, skilled at interacting with fans. For the topic "${topic}", generate 2 high-quality replies for each of 4 comment types:\n1. User question\n2. Compliment\n3. Doubt\n4. Inquiry\nFormat:\n[User question]\nReply1:...\nReply2:...\n[Compliment]...\n[...]
-No extra explanation.`;
+      case '/hook':
+        return `You are a Xiaohongshu (RED) viral content expert. Please generate 3-5 highly attractive hook-style openers for a post with the following background: "${topic}"\n\nFormat:\n🪝 Your hook content:\n\n1️⃣【Emotional】\n...\n2️⃣【Data-driven】\n...\n3️⃣【Contrast】\n...\n(If more, add more styles, each with a number and style label. Each line should be a different style, with a short, punchy, curiosity-inducing sentence. Use markdown for bold/italic if needed. No extra explanation.)`;
       default:
         return '';
     }
   }
-  // 中文原逻辑
   return buildPromptOrigin(cmd, topic);
 }
 
 function buildPromptOrigin(cmd, topic) {
   switch (cmd) {
-    case '/title':
-      return `你是一位深谙小红书爆款标题精髓的文案专家。请为以下主题「${topic}」创作 10 个爆款小红书标题。\n\n要求：\n1.  面向年轻用户（18-25岁），风格口语化、有网感、能引发好奇心。\n2.  避免浮夸和营销腔，要像真实用户在分享。\n3.  可以适当运用 emoji、数字、场景化描述来增强吸引力。\n4.  直接输出列表，每行一个标题，不要添加任何序号或多余的解释。`;
-    case '/post':
-      return `你是一位资深的小红书博主，尤其擅长撰写高互动率的图文"种草"笔记。请围绕主题「${topic}」，创作一篇完整的小红书图文笔记内容。\n\n要求：\n1.  使用第一人称视角，语气亲切、真实，像在和好朋友分享。\n2.  内容结构清晰，善用分点或分段来组织，并大量使用 emoji 增加生动性。\n3.  开头：用一个引人入胜的问题或一句话抓住读者眼球。\n4.  结尾：有一个总结性的句子，并用一句话引导用户评论、点赞或收藏。\n5.  在文末，另起一行，根据内容生成 5-8 个相关的小红书热门标签（hashtags）。\n6.  直接输出完整的笔记内容和标签，不要有任何额外的说明或标题。`;
-    case '/tags':
-      return `你是一位小红书运营专家，精通流量分发和标签（hashtag）策略。请为一篇关于「${topic}」的小红书笔记，推荐 10-15 个最合适的标签。\n\n要求：\n1.  推荐的标签需要有层次感，组合使用以达到最佳曝光效果，应包括：\n    -   2-3 个宽泛的类目大词 (如 #笔记灵感 #好物分享)\n    -   3-5 个精准的核心主题词 (直接与 ${topic} 相关)\n    -   3-5 个相关的场景或人群词 (如 #周末去哪儿 #学生党)\n    -   2-3 个潜在的热门或长尾词\n2.  直接输出所有标签，用空格隔开，以 # 开头。\n3.  不要添加任何分类标题或解释。`;
-    case '/cover':
-      return `你是一位小红书爆款文案专家。请为主题"${topic}"创作5组适合放在笔记封面上的"叠字文案"。\n\n要求：\n1.  每组文案由一个"主标题"和一个"副标题"构成。\n2.  主标题要非常吸引眼球，用词简单、有冲击力。\n3.  副标题是对主标题的补充或解释，言简意赅。\n4.  整体风格要适合小红书用户，活泼、有趣、或能引发好奇。\n5.  使用 emoji 增强表达力。\n6.  严格按照下面的格式输出，不要有任何多余的解释：\n\n主标题 | 副标题\n主标题 | 副标题\n主标题 | 副标题\n主标题 | 副标题\n主标题 | 副标题`;
-    case '/covertext':
-      return `你是一位极其擅长拿捏年轻用户情绪的小红书文案鬼才。请为主题「${topic}」创作 5 个用在笔记封面上的"叠字标题"。\n\n要求：\n1.  核心是"叠字"，如"冲冲冲"、"美哭了"、"绝绝子"，必须用这种形式来构建标题。\n2.  风格要极其吸睛、夸张、有强烈的情绪价值，让人一看就有点击的冲动。\n3.  长度控制在 10-15 字，适合在图片上展示。\n4.  直接输出列表，每行一个标题，不要添加任何序号或多余的解释。`;
-    case '/abtest':
-      return `你是一位小红书爆款内容专家。请围绕主题「${topic}」，分别用三种不同风格各生成一组完整的小红书内容（每组包含：标题、正文、标签），风格要求如下：\n\nA. 真实生活流：内容自然真实，像朋友间的真实分享。\nB. 猎奇冲突流：内容有反转、冲突感，能激发好奇心。\nC. 情绪感染流：内容有强烈代入感和情绪渲染。\n\n每组内容请严格按照如下格式输出：\n【风格A】\n标题：...\n正文：...\n标签：#... #... #...\n【风格B】\n标题：...\n正文：...\n标签：#... #... #...\n【风格C】\n标题：...\n正文：...\n标签：#... #... #...\n\n三组内容之间用"==="分隔，不要有任何多余解释。`;
-    case '/reply':
-      return `你是一位小红书高赞博主，善于与粉丝互动。请针对主题「${topic}」的笔记，分别为以下4类常见评论各生成2条高赞风格的互动回复：\n\n1. 用户疑问（如 敏感肌能用吗）\n2. 用户夸赞（如 好漂亮！）\n3. 用户质疑（如 会不会踩雷？）\n4. 用户咨询（如 哪里可以买到）\n\n要求：\n- 每类评论生成2条回复，风格自然、有代入感、略带引导性。\n- 回复要有亲和力，适当引导用户点赞、关注或私信。\n- 输出格式如下：\n【用户疑问】\n回复1：...\n回复2：...\n【用户夸赞】\n回复1：...\n回复2：...\n【用户质疑】\n回复1：...\n回复2：...\n【用户咨询】\n回复1：...\n回复2：...\n\n不要有任何多余解释。`;
+    case '/hook':
+      return `你是一位小红书爆款内容钩子专家。请根据以下品牌/行业/场景描述，生成 3-5 条极具吸引力的钩子型开头文案，适合小红书图文笔记开头。\n\n背景描述：「${topic}」\n\n格式如下：\n🪝 你的钩子内容来啦：\n\n1️⃣【情绪型】\n...\n2️⃣【数据型】\n...\n3️⃣【反差型】\n...\n(如有更多风格可继续，每条都要有编号和风格分类，内容要短、强吸引力、能激发好奇心。无需多余解释。)`;
     default:
       return '';
   }
@@ -404,18 +320,8 @@ async function sendInlineMenu(chat_id, text, lang) {
 
 // 拼写纠错映射
 const CMD_CORRECT = {
-  '/tilte': '/title',
-  '/titile': '/title',
-  '/titel': '/title',
-  '/psot': '/post',
-  '/tgas': '/tags',
-  '/tage': '/tags',
-  '/seo-chek': '/seo-check',
-  '/seocehck': '/seo-check',
-  '/seooptm': '/seoopt',
-  '/batc': '/batch',
-  '/abtes': '/abtest',
-  '/repl': '/reply',
+  '/hool': '/hook',
+  '/hok': '/hook',
   // 可继续扩展
 };
 
@@ -467,20 +373,15 @@ async function pollUpdates() {
             setUserLang(chat_id, lang_code);
             const lang = getUserLang(chat_id);
             const data = update.callback_query.data;
-            if (data === 'menu_title') {
-              await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /title Open a milk tea shop' : '请输入主题，例如 /title 奶茶店开业', lang);
-            } else if (data === 'menu_post') {
-              await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /post Open a milk tea shop' : '请输入主题，例如 /post 奶茶店开业', lang);
-            } else if (data === 'menu_tags') {
-              await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /tags Open a milk tea shop' : '请输入主题，例如 /tags 奶茶店开业', lang);
-            } else if (data === 'menu_seo') {
-              await sendMessage(chat_id, lang === 'en' ? 'Please enter content, e.g. /seo-check Milk tea shop copy: xxx' : '请输入内容，例如 /seo-check 奶茶店文案：xxx', lang);
+            if (data === 'menu_hook') {
+              await sendMessage(chat_id, lang === 'en' ? 'Please enter a background description, e.g. /hook I am a Singapore coffee shop, want to promote a new product' : '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
             } else if (data === 'menu_history') {
-              // 自动触发 /history
               const logs = getUserHistory(chat_id, 5);
               if (logs.length === 0) return await sendMessage(chat_id, ERROR_TIPS[lang].no_history, lang);
               let msg = logs.map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
               await sendMessage(chat_id, msg, lang);
+            } else if (data === 'menu_help') {
+              await sendMessage(chat_id, lang === 'en' ? helpMessageEn : helpMessage, lang);
             }
             // 回调按钮点击后移除 loading
             await fetch(`${API_URL}/answerCallbackQuery`, {
@@ -534,201 +435,61 @@ async function pollUpdates() {
             continue;
           }
 
-          // 指令纠错：如 /title 无参数
-          if (/^\/title\s*$/i.test(text)) {
-            await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /title Open a milk tea shop' : '请输入主题，例如 /title 奶茶店开业', lang);
-            await sendInlineMenu(chat_id, undefined, lang);
-            continue;
-          }
-          if (/^\/post\s*$/i.test(text)) {
-            await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /post Open a milk tea shop' : '请输入主题，例如 /post 奶茶店开业', lang);
-            await sendInlineMenu(chat_id, undefined, lang);
-            continue;
-          }
-          if (/^\/tags\s*$/i.test(text)) {
-            await sendMessage(chat_id, lang === 'en' ? 'Please enter a topic, e.g. /tags Open a milk tea shop' : '请输入主题，例如 /tags 奶茶店开业', lang);
-            await sendInlineMenu(chat_id, undefined, lang);
-            continue;
-          }
-          if (/^\/seo-check\s*$/i.test(text)) {
-            await sendMessage(chat_id, lang === 'en' ? 'Please enter content, e.g. /seo-check Milk tea shop copy: xxx' : '请输入内容，例如 /seo-check 奶茶店文案：xxx', lang);
-            await sendInlineMenu(chat_id, undefined, lang);
-            continue;
-          }
-          if (/^\/seoopt\s*$/i.test(text)) {
-            await sendMessage(chat_id, lang === 'en' ? 'Please enter content to optimize, e.g. /seoopt Your original copy' : '请输入需要优化的内容，例如 /seoopt 你的原始文案', lang);
+          // 指令纠错：如 /hook 无参数
+          if (/^\/hook\s*$/i.test(text)) {
+            await sendMessage(chat_id, lang === 'en' ? 'Please enter a background description, e.g. /hook I am a Singapore coffee shop, want to promote a new product' : '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
             await sendInlineMenu(chat_id, undefined, lang);
             continue;
           }
 
-          if (text.startsWith('/title ')) {
-            const topic = text.replace('/title', '').trim();
-            if (!topic) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating viral titles, please wait...' : '⏳ 正在为你生成爆款标题，请稍候...', lang);
+          // /hook 指令主逻辑
+          if (text.startsWith('/hook ')) {
+            const topic = text.replace('/hook', '').trim();
+            if (!topic) {
+              await sendMessage(chat_id, lang === 'en' ? 'Please enter a background description, e.g. /hook I am a Singapore coffee shop, want to promote a new product' : '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
+              await sendInlineMenu(chat_id, undefined, lang);
+              continue;
+            }
+            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating hook openers, please wait...' : '⏳ 正在为你生成钩子型开头，请稍候...', lang);
             try {
-              const prompt = buildPrompt('/title', topic, lang);
+              const prompt = buildPrompt('/hook', topic, lang);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: '标题生成', topic, result });
+              logHistory({ chat_id, type: '钩子开头', topic, result });
             } catch (e) {
               let msg = ERROR_TIPS[lang].api_fail;
               if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
               await sendMessage(chat_id, msg, lang);
             }
-          } else if (text.startsWith('/post ')) {
-            const topic = text.replace('/post', '').trim();
-            if (!topic) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating post content, please wait...' : '⏳ 正在为你生成图文内容，请稍候...', lang);
-            try {
-              const prompt = buildPrompt('/post', topic, lang);
-              const result = await callGemini(prompt);
-              await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: '图文生成', topic, result });
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
-          } else if (text.startsWith('/tags ')) {
-            const topic = text.replace('/tags', '').trim();
-            if (!topic) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating tags, please wait...' : '⏳ 正在为你推荐标签，请稍候...', lang);
-            try {
-              const prompt = buildPrompt('/tags', topic, lang);
-              const result = await callGemini(prompt);
-              await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: '标签生成', topic, result });
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
-          } else if (text.startsWith('/cover ')) {
-            const topic = text.replace('/cover', '').trim();
-            if (!topic) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating cover text, please wait...' : '⏳ 正在为你生成封面文案，请稍候...', lang);
-            try {
-              const prompt = buildPrompt('/cover', topic, lang);
-              const result = await callGemini(prompt);
-              await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: '封面文案', topic, result });
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
-          } else if (text.startsWith('/covertext ')) {
-            const topic = text.replace('/covertext', '').trim();
-            if (!topic) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating repeated-word titles, please wait...' : '⏳ 正在为你生成叠字标题，请稍候...', lang);
-            try {
-              const prompt = buildPrompt('/covertext', topic, lang);
-              const result = await callGemini(prompt);
-              await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: '叠字标题', topic, result });
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
-          } else if (text.startsWith('/batch ')) {
-            const topics = text.replace('/batch', '').trim();
-            if (!topics) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating batch titles, please wait...' : '⏳ 正在为你批量生成标题，请稍候...', lang);
-            try {
-              const topicArr = topics.split(/,|，/).map(t => t.trim()).filter(Boolean);
-              let allResults = [];
-              for (const t of topicArr) {
-                const prompt = buildPrompt('/title', t, lang);
-                const result = await callGemini(prompt);
-                allResults.push(`【${t}】\n${result}`);
-                logHistory({ chat_id, type: '批量标题', topic: t, result });
-              }
-              await sendMessage(chat_id, allResults.join('\n\n---\n\n'), lang);
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
-          } else if (text.startsWith('/abtest ')) {
-            const topic = text.replace('/abtest', '').trim();
-            if (!topic) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating AB test content, please wait...' : '⏳ 正在为你生成AB测试内容，请稍候...', lang);
-            try {
-              const prompt = buildPrompt('/abtest', topic, lang);
-              const result = await callGemini(prompt);
-              await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: 'AB测试', topic, result });
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
-          } else if (text.startsWith('/reply ')) {
-            const topic = text.replace('/reply', '').trim();
-            if (!topic) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating comment replies, please wait...' : '⏳ 正在为你生成评论回复，请稍候...', lang);
-            try {
-              const prompt = buildPrompt('/reply', topic, lang);
-              const result = await callGemini(prompt);
-              await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: '评论回复', topic, result });
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
-          } else if (text.startsWith('/search ')) {
+            continue;
+          }
+          // /search 指令
+          if (text.startsWith('/search ')) {
             const keyword = text.replace('/search', '').trim();
             if (!keyword) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
             const found = searchHistory(keyword, chat_id);
             if (found.length === 0) return await sendMessage(chat_id, ERROR_TIPS[lang].not_found, lang);
             let msg = found.slice(-5).reverse().map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
             await sendMessage(chat_id, msg, lang);
-          } else if (text === '/history') {
+            continue;
+          }
+          // /history 指令
+          if (text === '/history') {
             const logs = getUserHistory(chat_id, 5);
             if (logs.length === 0) return await sendMessage(chat_id, ERROR_TIPS[lang].no_history, lang);
             let msg = logs.map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
             await sendMessage(chat_id, msg, lang);
-          } else if (text.startsWith('/seo-check ') || text.startsWith('/seo ')) {
-            let input = text.replace(/^\/seo-check|^\/seo/, '').trim();
-            let type = '', content = '';
-            // 支持 /seo-check 标题 xxx
-            const match = input.match(/^(标题|正文|标签)\s+([\s\S]+)/);
-            if (match) {
-              type = match[1];
-              content = match[2].trim();
-            } else {
-              // 自动判断类型
-              content = input;
-              type = guessSeoType(content);
-            }
-            if (!content) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_content, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Analyzing SEO performance, please wait...' : '⏳ 正在分析SEO表现，请稍候...', lang);
-            try {
-              const prompt = getSeoPrompt(type, content);
-              const result = await callGemini(prompt);
-              await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: 'SEO检查', topic: `${type}:${content.slice(0,30)}`, result });
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
-          } else if (text.startsWith('/seoopt ')) {
-            const content = text.replace('/seoopt', '').trim();
-            if (!content) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_content, lang);
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Analyzing and optimizing content, please wait...' : '⏳ 正在为你分析并优化文案，请稍候...', lang);
-            try {
-              const prompt = getSeoOptPrompt(content);
-              const result = await callGemini(prompt);
-              await sendMessage(chat_id, result, lang);
-              logHistory({ chat_id, type: 'SEO优化建议', topic: content.slice(0,30), result });
-            } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
-              await sendMessage(chat_id, msg, lang);
-            }
+            continue;
+          }
+          // /xhs-help 指令
+          if (text === '/xhs-help') {
+            await sendMessage(chat_id, lang === 'en' ? helpMessageEn : helpMessage, lang);
+            continue;
+          }
+          // /menu 指令
+          if (text === '/menu') {
+            await sendInlineMenu(chat_id, undefined, lang);
+            continue;
           }
         }
       }
