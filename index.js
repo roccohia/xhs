@@ -14,7 +14,7 @@ if (GEMINI_API_KEY) {
   geminiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 }
 
-// 多语言支持
+// 多语言支持 - 仅保留中文
 const I18N = {
   zh: {
     welcome: '👋 欢迎使用 Gemini 小红书助手！请选择功能或输入指令：',
@@ -27,40 +27,24 @@ const I18N = {
 ❓ /xhs-help —— 显示帮助列表
 /menu —— 弹出主菜单按钮
 `,
-    // 其它提示可继续扩展
-  },
-  en: {
-    welcome: '👋 Welcome to Gemini Xiaohongshu Assistant! Please select a feature or enter a command:',
-    menu: 'Please select a feature:',
-    help: `🧃 Gemini Xiaohongshu Assistant Bot supports the following commands:
-
-🪝 /hook background —— Generate Xiaohongshu hook openers
-📁 /history —— View your recent requests
-🔍 /search keyword —— Search your history
-❓ /xhs-help —— Show help menu
-/menu —— Show main menu buttons
-`,
   }
 };
 
 function getLangByCode(code) {
-  if (!code) return 'zh';
-  if (code.startsWith('zh')) return 'zh';
-  if (code.startsWith('en')) return 'en';
-  return 'zh';
+  return 'zh'; // 强制使用中文
 }
 
 const userLangMap = new Map(); // chat_id => lang
 
 function getUserLang(chat_id) {
-  return userLangMap.get(chat_id) || 'zh';
+  return 'zh'; // 强制使用中文
 }
 
 function setUserLang(chat_id, code) {
-  userLangMap.set(chat_id, getLangByCode(code));
+  userLangMap.set(chat_id, 'zh'); // 强制使用中文
 }
 
-// 优化版帮助信息
+// 优化版帮助信息 - 仅中文
 const helpMessage = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 
 🪝 /hook 背景描述 —— 小红书钩子型开头生成
@@ -69,16 +53,6 @@ const helpMessage = `🧃 Gemini 小红书助手 Bot 支持以下指令：
 ❓ /xhs-help —— 显示帮助列表
 /menu —— 弹出主菜单按钮
 `;
-const helpMessageEn = `🧃 Gemini Xiaohongshu Assistant Bot supports the following commands:
-
-🪝 /hook background —— Generate Xiaohongshu hook openers
-📁 /history —— View your recent requests
-🔍 /search keyword —— Search your history
-❓ /xhs-help —— Show help menu
-/menu —— Show main menu buttons
-`;
-I18N.zh.help = helpMessage;
-I18N.en.help = helpMessageEn;
 
 const DATA_DIR = path.join(__dirname, 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
@@ -208,35 +182,39 @@ async function sendMessage(chat_id, text, lang) {
 }
 
 function buildPrompt(cmd, topic, lang) {
-  if (lang === 'en') {
-    switch (cmd) {
-      case '/hook':
-        return `You are a Xiaohongshu (RED) viral content expert. Please generate 3-5 highly attractive hook-style openers for a post with the following background: "${topic}"\n\nFormat:\n🪝 Your hook content:\n\n1️⃣【Emotional】\n...\n2️⃣【Data-driven】\n...\n3️⃣【Contrast】\n...\n(If more, add more styles, each with a number and style label. Each line should be a different style, with a short, punchy, curiosity-inducing sentence. Use markdown for bold/italic if needed. No extra explanation.)`;
-      default:
-        return '';
-    }
-  }
   return buildPromptOrigin(cmd, topic);
 }
 
 function buildPromptOrigin(cmd, topic) {
   switch (cmd) {
     case '/hook':
-      return `你是一位专为品牌打造小红书爆款内容的运营策划师。
+      return `你是一个专为新加坡商家写小红书爆款内容的营销顾问。
 
-请根据用户提供的活动或产品背景，生成 1–2 条高吸引力的小红书钩子型文案，适合用于图文笔记的开头。
+请根据以下背景，生成 1~2 条适合用于小红书图文笔记开头的"钩子型文案"。
 
-🎯 目标是：让看到的人忍不住点赞、评论、收藏或转发。
+🎯 写作目标：
+让读者在 2 秒内被吸引，愿意点赞、收藏、评论或私信咨询。
 
-要求：
-- 使用真实博主语气，说人话
-- 避免模板句式、广告腔、重复 Emoji
-- 每条不超过 30 字，突出“爆点、反差、情绪、痛点、暗示”
-- 可加入轻微情绪色彩（如：“说真的，我们被吓到了”）
-- 输出纯文本，不要多余说明
+🎯 风格要求：
+- 要像真实博主写的，不是广告、不是机器人
+- 可以带情绪、有争议、制造反差、提问、造梗，选一种即可
+- 用人话说事儿，不要用【标签】、不要解释类型
+- 每条控制在 30 字以内，越短越上头
+- 可以带 Emoji（适度），不要乱堆
+- 不要输出任何说明、标签、解释，只要文案
 
-背景：
-${topic}`;
+背景如下：
+${topic}
+示例生成效果（用上面 prompt 可生成类似）：
+说真的，我们是被这个价格吓到了…
+
+双人瑜伽只要10块？姐妹直接拉我冲！
+
+或者：
+
+我以为我老板疯了，这活动他真放出来了…
+
+有人说我们赔本赚吆喝，但她们都在转！`;
     default:
       return '';
   }
@@ -343,10 +321,10 @@ function getCorrection(cmd) {
   return CMD_CORRECT[cmd.toLowerCase()] || null;
 }
 
-// 统一错误提示
+// 统一错误提示 - 仅中文
 const ERROR_TIPS = {
   zh: {
-    empty_topic: '❗️主题不能为空，请在指令后输入你想要生成的主题或内容。例如：/title 珠宝店开业\n\n常见原因：\n- 忘记输入主题或内容\n- 指令后有多余空格\n\n请重新输入正确格式。',
+    empty_topic: '❗️主题不能为空，请在指令后输入你想要生成的主题或内容。例如：/hook 珠宝店开业\n\n常见原因：\n- 忘记输入主题或内容\n- 指令后有多余空格\n\n请重新输入正确格式。',
     empty_content: '❗️内容不能为空，请在指令后输入需要分析或优化的内容。',
     api_timeout: '❗️AI 响应超时，可能是网络不佳或请求过于复杂。\n建议：\n- 稍后重试\n- 换个主题或缩短内容',
     api_fail: '❗️AI 生成失败，可能是网络异常、API 配额不足或内容不合规。\n建议：\n- 稍后重试\n- 检查输入内容是否合规',
@@ -355,17 +333,6 @@ const ERROR_TIPS = {
     too_long: '❗️输入内容过长，建议缩短后重试。',
     unknown: '❗️发生未知错误，请稍后重试。',
     preview_tip: '\n\n回复【全文】查看全部内容',
-  },
-  en: {
-    empty_topic: '❗️Topic cannot be empty. Please enter the topic or content after the command.\n\nCommon reasons:\n- Forgot to enter topic/content\n- Extra spaces after command\n\nPlease try again in the correct format.',
-    empty_content: '❗️Content cannot be empty. Please enter the content to analyze or optimize after the command.',
-    api_timeout: '❗️AI response timed out. This may be due to network issues or a complex request.\nSuggestions:\n- Try again later\n- Use a simpler or shorter topic',
-    api_fail: '❗️AI generation failed. Possible reasons: network error, API quota exceeded, or content not allowed.\nSuggestions:\n- Try again later\n- Check if your input is appropriate',
-    not_found: 'No related history found.',
-    no_history: 'No history yet.',
-    too_long: '❗️Input is too long. Please shorten and try again.',
-    unknown: '❗️An unknown error occurred. Please try again later.',
-    preview_tip: '\n\nReply "全文" to view the full content.',
   }
 };
 
@@ -388,14 +355,14 @@ async function pollUpdates() {
             const lang = getUserLang(chat_id);
             const data = update.callback_query.data;
             if (data === 'menu_hook') {
-              await sendMessage(chat_id, lang === 'en' ? 'Please enter a background description, e.g. /hook I am a Singapore coffee shop, want to promote a new product' : '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
+              await sendMessage(chat_id, '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
             } else if (data === 'menu_history') {
               const logs = getUserHistory(chat_id, 5);
-              if (logs.length === 0) return await sendMessage(chat_id, ERROR_TIPS[lang].no_history, lang);
+              if (logs.length === 0) return await sendMessage(chat_id, ERROR_TIPS.zh.no_history, lang);
               let msg = logs.map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
               await sendMessage(chat_id, msg, lang);
             } else if (data === 'menu_help') {
-              await sendMessage(chat_id, lang === 'en' ? helpMessageEn : helpMessage, lang);
+              await sendMessage(chat_id, helpMessage, lang);
             }
             // 回调按钮点击后移除 loading
             await fetch(`${API_URL}/answerCallbackQuery`, {
@@ -425,7 +392,7 @@ async function pollUpdates() {
           // 首次对话欢迎
           if (!greeted.has(chat_id)) {
             greeted.add(chat_id);
-            await sendMessage(chat_id, lang === 'en' ? '👋 Welcome to Gemini Xiaohongshu Assistant! Please select a function or enter a command:' : '👋 欢迎使用 Gemini 小红书助手！请选择功能或输入指令：', lang);
+            await sendMessage(chat_id, '👋 欢迎使用 Gemini 小红书助手！请选择功能或输入指令：', lang);
             await sendInlineMenu(chat_id, undefined, lang);
           }
 
@@ -433,7 +400,7 @@ async function pollUpdates() {
           const lower = text.toLowerCase();
           if (getCorrection(lower)) {
             const correct = getCorrection(lower);
-            await sendMessage(chat_id, (lang === 'en' ? `Did you mean ${correct}?` : `你是不是想输入 ${correct}？`), lang);
+            await sendMessage(chat_id, `你是不是想输入 ${correct}？`, lang);
             await sendInlineMenu(chat_id, undefined, lang);
             continue;
           }
@@ -445,13 +412,13 @@ async function pollUpdates() {
           }
 
           if (text === '/xhs-help') {
-            await sendMessage(chat_id, lang === 'en' ? helpMessageEn : helpMessage, lang);
+            await sendMessage(chat_id, helpMessage, lang);
             continue;
           }
 
           // 指令纠错：如 /hook 无参数
           if (/^\/hook\s*$/i.test(text)) {
-            await sendMessage(chat_id, lang === 'en' ? 'Please enter a background description, e.g. /hook I am a Singapore coffee shop, want to promote a new product' : '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
+            await sendMessage(chat_id, '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
             await sendInlineMenu(chat_id, undefined, lang);
             continue;
           }
@@ -460,19 +427,19 @@ async function pollUpdates() {
           if (text.startsWith('/hook ')) {
             const topic = text.replace('/hook', '').trim();
             if (!topic) {
-              await sendMessage(chat_id, lang === 'en' ? 'Please enter a background description, e.g. /hook I am a Singapore coffee shop, want to promote a new product' : '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
+              await sendMessage(chat_id, '请输入背景描述，例如 /hook 我是新加坡咖啡店，想推广新品', lang);
               await sendInlineMenu(chat_id, undefined, lang);
               continue;
             }
-            await sendMessage(chat_id, lang === 'en' ? '⏳ Generating hook openers, please wait...' : '⏳ 正在为你生成钩子型开头，请稍候...', lang);
+            await sendMessage(chat_id, '⏳ 正在为你生成钩子型开头，请稍候...', lang);
             try {
               const prompt = buildPrompt('/hook', topic, lang);
               const result = await callGemini(prompt);
               await sendMessage(chat_id, result, lang);
               logHistory({ chat_id, type: '钩子开头', topic, result });
             } catch (e) {
-              let msg = ERROR_TIPS[lang].api_fail;
-              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS[lang].api_timeout;
+              let msg = ERROR_TIPS.zh.api_fail;
+              if (e && /timeout|超时/i.test(e.message)) msg = ERROR_TIPS.zh.api_timeout;
               await sendMessage(chat_id, msg, lang);
             }
             continue;
@@ -480,9 +447,9 @@ async function pollUpdates() {
           // /search 指令
           if (text.startsWith('/search ')) {
             const keyword = text.replace('/search', '').trim();
-            if (!keyword) return await sendMessage(chat_id, ERROR_TIPS[lang].empty_topic, lang);
+            if (!keyword) return await sendMessage(chat_id, ERROR_TIPS.zh.empty_topic, lang);
             const found = searchHistory(keyword, chat_id);
-            if (found.length === 0) return await sendMessage(chat_id, ERROR_TIPS[lang].not_found, lang);
+            if (found.length === 0) return await sendMessage(chat_id, ERROR_TIPS.zh.not_found, lang);
             let msg = found.slice(-5).reverse().map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
             await sendMessage(chat_id, msg, lang);
             continue;
@@ -490,14 +457,14 @@ async function pollUpdates() {
           // /history 指令
           if (text === '/history') {
             const logs = getUserHistory(chat_id, 5);
-            if (logs.length === 0) return await sendMessage(chat_id, ERROR_TIPS[lang].no_history, lang);
+            if (logs.length === 0) return await sendMessage(chat_id, ERROR_TIPS.zh.no_history, lang);
             let msg = logs.map(item => `【${item.type}】${item.topic}\n${item.result.slice(0, 200)}...\n时间: ${item.time}`).join('\n\n');
             await sendMessage(chat_id, msg, lang);
             continue;
           }
           // /xhs-help 指令
           if (text === '/xhs-help') {
-            await sendMessage(chat_id, lang === 'en' ? helpMessageEn : helpMessage, lang);
+            await sendMessage(chat_id, helpMessage, lang);
             continue;
           }
           // /menu 指令
